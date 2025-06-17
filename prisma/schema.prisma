@@ -11,7 +11,7 @@ datasource db {
 model User {
   id       String   @id @default(uuid())
   username String   @unique
-  password String   // bcrypt hash
+  passwordHash String   // bcrypt hash
   // Роль не сохраняем — определяем по username ("admin", "Никита", остальные)
 
   taps     UserTap[]

@@ -16,11 +16,11 @@ export async function authRoutes(app: FastifyInstance) {
       // Новый пользователь → создать
       const hashed = await bcrypt.hash(password, 10);
       user = await prisma.user.create({
-        data: { username, password: hashed },
+        data: { username, passwordHash: hashed },
       });
     } else {
       // Уже есть → проверка пароля
-      const match = await bcrypt.compare(password, user.password);
+      const match = await bcrypt.compare(password, user.passwordHash);
       if (!match) {
         return res.status(401).send({ error: 'Invalid password' });
       }
