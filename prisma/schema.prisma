@@ -1,0 +1,38 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String   @id @default(uuid())
+  username String   @unique
+  password String   // bcrypt hash
+  // Роль не сохраняем — определяем по username ("admin", "Никита", остальные)
+
+  taps     UserTap[]
+}
+
+model Round {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  startAt   DateTime
+  endAt     DateTime
+
+  taps      UserTap[]
+}
+
+model UserTap {
+  roundId   String
+  userId    String
+  tapCount  Int     @default(0)
+
+  Round     Round   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  User      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roundId, userId])
+}

@@ -1,0 +1,31 @@
+{
+  "type": "module",
+  "name": "thelastofguss-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:push": "prisma db push",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/jwt": "^9.1.0",
+    "@prisma/client": "^6.9.0",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^16.5.0",
+    "fastify": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "nodemon": "^3.1.10",
+    "prisma": "^6.9.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
