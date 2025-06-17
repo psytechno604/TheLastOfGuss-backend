@@ -29,12 +29,52 @@ export async function roundRoutes(app: FastifyInstance) {
       return res.status(403).send({ error: 'Only admin can create rounds' });
     }
 
+    const { startAt, endAt } = req.body as {
+      startAt: string;
+      endAt: string;
+    };
+
+    if (!startAt || !endAt) {
+      return res.status(400).send({ error: 'startAt and endAt required' });
+    }
+
+    const start = new Date(startAt);
+    const end = new Date(endAt);
     const now = new Date();
-    const startAt = new Date(now.getTime() + cooldownDuration);
-    const endAt = new Date(startAt.getTime() + roundDuration);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).send({ error: 'Invalid date format' });
+    }
+
+    if (start >= end) {
+      return res.status(400).send({ error: 'startAt must be before endAt' });
+    }
+
+    if (start < now || end < now) {
+      return res.status(400).send({ error: 'startAt and endAt must be in the future' });
+    }
+
+    // Проверка на пересечение с существующими раундами
+    const overlapping = await prisma.round.findFirst({
+      where: {
+        OR: [
+          {
+            startAt: { lt: end },
+            endAt: { gt: start },
+          },
+        ],
+      },
+    });
+
+    if (overlapping) {
+      return res.status(409).send({ error: 'Round time overlaps with existing round' });
+    }
 
     const round = await prisma.round.create({
-      data: { startAt, endAt },
+      data: {
+        startAt: start,
+        endAt: end,
+      },
     });
 
     return res.send(round);
@@ -97,5 +137,32 @@ export async function roundRoutes(app: FastifyInstance) {
     }
 
     return res.send({ ok: true });
+  });
+
+  app.delete('/', async (req, res) => {
+    if (!req.userEntry) return res.status(401).send({ error: 'Unauthorized' });
+    if (getRole(req.userEntry.username) !== 'admin') {
+      return res.status(403).send({ error: 'Only admin can delete rounds' });
+    }
+
+    await prisma.userTap.deleteMany(); // удалить связанные записи
+    await prisma.round.deleteMany();
+
+    return res.send({ ok: true });
+  });
+  app.delete('/:id', async (req, res) => {
+    if (!req.userEntry) return res.status(401).send({ error: 'Unauthorized' });
+    if (getRole(req.userEntry.username) !== 'admin') {
+      return res.status(403).send({ error: 'Only admin can delete rounds' });
+    }
+
+    const { id } = req.params as { id: string };
+
+    try {
+      await prisma.round.delete({ where: { id } });
+      return res.send({ ok: true });
+    } catch (err) {
+      return res.status(404).send({ error: 'Round not found' });
+    }
   });
 }
