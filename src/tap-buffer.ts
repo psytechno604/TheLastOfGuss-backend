@@ -1,7 +1,7 @@
 import { prisma } from './db.js';
 
-const BLOCK_SIZE = Number(process.env.TAP_BLOCK_SIZE || 10);
-const BLOCK_TTL_MS = Number(process.env.TAP_BLOCK_TTL_MS || 1000);
+const TAP_BLOCK_SIZE = Number(process.env.TAP_BLOCK_SIZE || 10);
+const TAP_BLOCK_TTL_MS = Number(process.env.TAP_BLOCK_TTL_MS || 1000);
 
 type TapKey = string; // `${roundId}_${userId}`
 
@@ -19,14 +19,14 @@ function makeKey(roundId: string, userId: string): TapKey {
 
 export async function bufferTap(roundId: string, userId: string, count: number) {
   await ensureFlushScheduled(roundId);
-  
+
   const key = makeKey(roundId, userId);
   const existing = buffer.get(key);
 
   const now = Date.now();
   const newCount = (existing?.count || 0) + count;
 
-  if (newCount >= BLOCK_SIZE) {
+  if (newCount >= TAP_BLOCK_SIZE) {
     buffer.delete(key);
 
     await prisma.userTap.upsert({
@@ -85,7 +85,7 @@ setInterval(async () => {
   const expired: [TapKey, TapBufferEntry][] = [];
 
   for (const [key, entry] of buffer.entries()) {
-    if (now - entry.updatedAt >= BLOCK_TTL_MS) {
+    if (now - entry.updatedAt >= TAP_BLOCK_TTL_MS) {
       expired.push([key, entry]);
       buffer.delete(key);
     }
@@ -99,4 +99,4 @@ setInterval(async () => {
       update: { tapCount: { increment: entry.count } },
     });
   }));
-}, BLOCK_TTL_MS);
+}, TAP_BLOCK_TTL_MS);

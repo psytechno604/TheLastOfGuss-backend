@@ -3,8 +3,7 @@ import { prisma } from './db.js';
 import { getRoundCached, getRoundStatus } from './round-cache.js';
 import { bufferTap } from './tap-buffer.js';
 
-const roundDuration = Number(process.env.ROUND_DURATION || 60) * 1000;
-const cooldownDuration = Number(process.env.COOLDOWN_DURATION || 30) * 1000;
+const ROUND_DURATION_SEC = Number(process.env.ROUND_DURATION_SEC || 60) * 1000;
 
 function getRole(username: string): 'admin' | 'nikita' | 'user' {
   if (username === 'admin') return 'admin';
@@ -13,13 +12,20 @@ function getRole(username: string): 'admin' | 'nikita' | 'user' {
 }
 
 function calcScore(taps: number): number {
-  return Math.floor(taps / 11) * 10 + (taps % 11);
+  return Math.floor(taps / 11) * 9 + taps;
 }
 
 export async function roundRoutes(app: FastifyInstance) {
   // Получить все раунды
   app.get('/', async () => {
-    return prisma.round.findMany({ orderBy: { createdAt: 'desc' } });
+    const rounds = await prisma.round.findMany({ orderBy: { startAt: 'desc' } });
+    return rounds.map(round => {
+      const status = getRoundStatus(round.startAt, round.endAt);
+      return {
+        ...round,
+        status,
+      };
+    });
   });
 
   // Создать раунд (только admin)
@@ -29,30 +35,26 @@ export async function roundRoutes(app: FastifyInstance) {
       return res.status(403).send({ error: 'Only admin can create rounds' });
     }
 
-    const { startAt, endAt } = req.body as {
+    const { startAt } = req.body as {
       startAt: string;
-      endAt: string;
     };
 
-    if (!startAt || !endAt) {
-      return res.status(400).send({ error: 'startAt and endAt required' });
+    if (!startAt) {
+      return res.status(400).send({ error: 'startAt required' });
     }
 
     const start = new Date(startAt);
-    const end = new Date(endAt);
     const now = new Date();
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    if (isNaN(start.getTime())) {
       return res.status(400).send({ error: 'Invalid date format' });
     }
 
-    if (start >= end) {
-      return res.status(400).send({ error: 'startAt must be before endAt' });
+    if (start <= now) {
+      return res.status(400).send({ error: 'startAt must be in the future' });
     }
 
-    if (start < now || end < now) {
-      return res.status(400).send({ error: 'startAt and endAt must be in the future' });
-    }
+    const end = new Date(start.getTime() + ROUND_DURATION_SEC);
 
     // Проверка на пересечение с существующими раундами
     const overlapping = await prisma.round.findFirst({
@@ -90,6 +92,7 @@ export async function roundRoutes(app: FastifyInstance) {
 
     let myScore = 0;
     let topUser = null;
+    let totalScore = 0;
 
     if (status === 'finished') {
       const taps = await prisma.userTap.findMany({
@@ -101,20 +104,27 @@ export async function roundRoutes(app: FastifyInstance) {
       const isNikita = req.user && getRole(req.userEntry.username) === 'nikita';
 
       for (const t of taps) {
+        const role = getRole(t.User.username);
+        const score = calcScore(t.tapCount);
+
         if (req.userEntry && t.userId === req.userEntry.id) {
-          myScore = isNikita ? 0 : calcScore(t.tapCount);
+          myScore = isNikita ? 0 : score;
         }
 
-        if (!topUser && getRole(t.User.username) !== 'nikita') {
-          topUser = {
-            username: t.User.username,
-            score: calcScore(t.tapCount),
-          };
+        if (role !== 'nikita') {
+          totalScore += score;
+          if (!topUser) {
+            topUser = {
+              username: t.User.username,
+              score,
+            };
+          }
         }
       }
+      return res.send({ ...round, status, totalScore, myScore, topUser });
     }
 
-    return res.send({ ...round, status, myScore, topUser });
+    return res.send({ ...round, status });
   });
 
   // Тап по гусю

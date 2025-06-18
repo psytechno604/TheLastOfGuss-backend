@@ -41,4 +41,8 @@ export async function authRoutes(app: FastifyInstance) {
 
     return res.send({ ok: true });
   });
+  app.get('/whoami', async (req, res) => {
+    if (!req.userEntry) return res.status(401).send({ error: 'Unauthorized' });
+    return res.send(req.userEntry);
+  });
 }

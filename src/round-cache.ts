@@ -1,8 +1,7 @@
 import { prisma } from './db.js';
 
-const TTL = Number(process.env.ROUND_CACHE_TTL_MS || 1000);
-
-type RoundStatus = 'waiting' | 'active' | 'finished';
+const ROUND_CACHE_TTL_MS = Number(process.env.ROUND_CACHE_TTL_MS || 1000);
+const COOLDOWN_DURATION_SEC = Number(process.env.COOLDOWN_DURATION_SEC || 30) * 1000;
 
 interface CachedRound {
   id: string;
@@ -18,7 +17,7 @@ export async function getRoundCached(id: string): Promise<CachedRound | null> {
   const now = Date.now();
   const cached = cache.get(id);
 
-  if (cached && now - cached.updatedAt < TTL) {
+  if (cached && now - cached.updatedAt < ROUND_CACHE_TTL_MS) {
     return cached;
   }
 
@@ -41,12 +40,15 @@ export async function getRoundCached(id: string): Promise<CachedRound | null> {
   return result;
 }
 
+export type RoundStatus = 'waiting' | 'cooldown' | 'active' | 'finished';
+
 export function getRoundStatus(start: Date | number, end: Date | number): RoundStatus {
   const now = Date.now();
   const s = typeof start === 'number' ? start : start.getTime();
   const e = typeof end === 'number' ? end : end.getTime();
 
-  if (now < s) return 'waiting';
+  if (now < s - COOLDOWN_DURATION_SEC) return 'waiting';
+  if (now < s) return 'cooldown';
   if (now <= e) return 'active';
   return 'finished';
 }
